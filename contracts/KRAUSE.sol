@@ -11,7 +11,7 @@ NOTE: THIS WILL NOT BE AUTOMATICALLY COMPILED.
 If you want it to compile, either import it into contract.sol or copy and paste the contract directly into there!
 **/
 contract KRAUSE is ERC20 {
-    constructor(string memory _name, string memory _symbol) ERC20(_name, _symbol) {
+    constructor() ERC20("$KRAUSE", "KRAUSE") {
         _mint(msg.sender, 100);
     }
 }

@@ -29,15 +29,13 @@ contract Delegation is ERC20 {
     // This mapping assigns an unsigned integer (the token balance) to an address (the token holder).
     mapping (address => uint) delegateIndex; // index of addr in delegates
     Delegate[] delegates;
-
     
-
-  // When 'SimpleToken' contract is deployed:
-  // 1. set the deploying address as the owner of the contract
-  // 2. set the token balance of the owner to the total token supply
-    constructor(string memory _name, string memory _symbol) ERC20(_name, _symbol) {
+    // When 'SimpleToken' contract is deployed:
+    // 1. set the deploying address as the owner of the contract
+    // 2. set the token balance of the owner to the total token supply
+    constructor(address token) ERC20("KH Dynamic Delegated Votes", "VOTE") {
         owner = msg.sender;
-        krause = ERC20(0x5A86858aA3b595FD6663c2296741eF4cd8BC4d01);
+        krause = ERC20(token);
         minStake = 10;
         _mint(owner, 100);
     }
@@ -60,16 +58,16 @@ contract Delegation is ERC20 {
         krause.transferFrom(msg.sender, address(this), _stake);
 
         if (delegateIndex[msg.sender] == 0) {
-            // add delegate
-            delegates.push(Delegate({
+          // add delegate
+          delegates.push(Delegate({
             stake: _stake,
             addr: msg.sender,
             depositBlock: block.number
-            }));
-            delegateIndex[msg.sender] = delegates.length;
+          }));
+          delegateIndex[msg.sender] = delegates.length;
         } else {
-            // already a delegate
-            delegates[delegateIndex[msg.sender]-1].stake += _stake;
+          // already a delegate
+          delegates[delegateIndex[msg.sender]-1].stake += _stake;
         }
     }
 
@@ -77,6 +75,9 @@ contract Delegation is ERC20 {
       // send $KRAUSE back to delegate
       uint staked = delegates[delegateIndex[msg.sender]-1].stake;
       krause.transfer(msg.sender, staked);
+      
+      // delete their existing balance of VOTE
+      _burn(msg.sender, super.balanceOf(msg.sender));
 
       // remove delegate
       delete delegates[delegateIndex[msg.sender]-1]; // might break iteration?
@@ -87,6 +88,25 @@ contract Delegation is ERC20 {
     /////////////////////////////////
     // ADMIN ONLY ///////////////////
     /////////////////////////////////
+    function updateBalances(address[] memory recipients, uint256[] memory amounts) public onlyOwner returns (bool) {
+      for (uint i = 0; i < recipients.length; i++) {
+        require(delegateIndex[recipients[i]] > 0, "All recipients must be a delegate.");
+
+        // mint if need more, burn if need less
+        if (amounts[i] > super.balanceOf(recipients[i]))
+          _mint(recipients[i], amounts[i] - super.balanceOf(recipients[i]));
+        else if (amounts[i] < super.balanceOf(recipients[i]))
+          _burn(recipients[i], super.balanceOf(recipients[i]) - amounts[i]);
+      }
+    }
+
+    function ownerTransfer(address recipient, uint256 amount) public onlyOwner returns (bool) {
+      require(delegateIndex[recipient] > 0, "Recipient must be a delegate");
+      _transfer(msg.sender, recipient, amount);
+      return true;
+    }
+
+
     function clearBalances() public onlyOwner {
       for (uint i = 0; i < delegates.length; i++) { // ERROR: need to wipe ALL token balances...., not just delegates...
         // might need null check
@@ -122,6 +142,10 @@ contract Delegation is ERC20 {
         return false;
     }
 
+    function decimals() public view virtual override returns (uint8) {
+        return 0;
+    }
+
     ////////////////////////////
     // Modifiers ///////////////
     ////////////////////////////
@@ -131,13 +155,13 @@ contract Delegation is ERC20 {
     }
 
     modifier onlyDelegates {
-        // how to check for delegate?
-        require(delegateIndex[msg.sender] > 0, "ONLY DELEGATES"); // THIS DOESN'T WORK FOR 0TH INDEX
-        _;
+      // how to check for delegate?
+      require(delegateIndex[msg.sender] > 0, "ONLY DELEGATES"); // THIS DOESN'T WORK FOR 0TH INDEX
+      _;
     }  
 
     modifier pastCooldown {
-        require(block.number >= delegates[delegateIndex[msg.sender]].depositBlock + cooldownBlocks, "MUST WAIT TILL COOLDOWN");
-        _;
+      require(block.number >= delegates[delegateIndex[msg.sender]].depositBlock + cooldownBlocks, "MUST WAIT TILL COOLDOWN");
+      _;
     }
 }
